@@ -48,8 +48,13 @@ Na tabela "DETALHAMENTO", você pode clicar na coluna "Categoria" para classific
 
 Após classificar, clique no botão 💾 Salvar Alterações no final da tabela. Uma notificação aparecerá confirmando o salvamento.
 
-Dashboard (TOP 5)
-O gráfico TOP 5 mostra visualmente onde está o seu maior volume de gastos. Ele se atualiza automaticamente conforme você categoriza as transações.
+Dashboard e Gráficos
+Card de Despesas: Exibe o valor real total de todas as saídas registradas no período.
+
+Gráfico TOP 5: Este gráfico destaca exclusivamente as 5 categorias onde houve o maior volume de gastos.
+
+Observação Importante: A soma das barras do gráfico pode ser menor que o valor total exibido no Card de Despesas. 
+Isso ocorre porque o gráfico prioriza a visualização dos seus 5 maiores gargalos financeiros, omitindo categorias menores para manter a clareza visual.
 
 4. 🧽 Manutenção e "Reset" (Dica de Ouro)
 Se você desejar apagar todos os dados e começar o gerenciamento do zero (limpar o banco de dados):
@@ -61,5 +66,5 @@ Vá até a pasta do projeto pelo explorador de arquivos do Windows.
 Localize o arquivo financeiro.db e delete-o.
 
 Ao rodar o comando streamlit run app.py novamente, o sistema criará um banco novo e vazio.
-
+--------------------------------------------
 Foco em automação, precisão de dados e gestão eficiente.
