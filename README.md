@@ -1,8 +1,65 @@
-# 📊 Analisador de Gastos Profissional
-App para gestão financeira pessoal que lê arquivos OFX bancários.
+📊 Guia do Usuário: Analisador de Gastos OFX
+Este pacote contém uma ferramenta completa para transformar seus extratos bancários em um dashboard financeiro inteligente.
 
-## ✨ Funcionalidades
-- Importação de extratos OFX.
-- Categorização personalizada com banco de dados SQLite.
-- Ranking Top 5 de despesas com gráficos dinâmicos.
-- Sugestão de destinação do saldo calculado entre receitas - despesas (Regra 70/10/5/5).
+1. 🛠️ Preparação do Ambiente
+Antes de abrir o aplicativo pela primeira vez, você precisa instalar os requisitos necessários.
+
+Abrir o Terminal (CMD):
+
+Pressione as teclas Windows + R, digite cmd e aperte Enter.
+
+Navegar até a pasta do App:
+
+No terminal, digite cd seguido do caminho onde você salvou esta pasta.
+
+Exemplo: cd C:\Projetos\GestaoFinanceira
+
+Instalar Dependências:
+
+Digite o comando abaixo e aguarde a finalização:
+
+Bash
+pip install -r requirements.txt
+2. 🚀 Como Iniciar o Aplicativo
+Sempre que quiser usar o app, siga este procedimento:
+
+Abra o Terminal (CMD).
+
+Navegue até a pasta (usando o comando cd como mostrado acima).
+
+Digite o comando de inicialização:
+
+Bash
+streamlit run app.py
+O sistema abrirá automaticamente uma aba no seu navegador de internet.
+
+3. 🕹️ Como Usar o Sistema
+Importando Dados
+Clique em "📁 Importar Extrato" para expandir a área de upload.
+
+Selecione seu arquivo .OFX exportado do banco.
+
+Clique no botão 🔄 Processar Novo Arquivo.
+
+Atenção: O sistema possui trava de duplicidade. Se você subir o mesmo arquivo duas vezes, ele ignorará as transações repetidas para não contaminar seu saldo.
+
+Categorizando Gastos
+Na tabela "DETALHAMENTO", você pode clicar na coluna "Categoria" para classificar cada gasto.
+
+Após classificar, clique no botão 💾 Salvar Alterações no final da tabela. Uma notificação aparecerá confirmando o salvamento.
+
+Dashboard (TOP 5)
+O gráfico TOP 5 mostra visualmente onde está o seu maior volume de gastos. Ele se atualiza automaticamente conforme você categoriza as transações.
+
+4. 🧽 Manutenção e "Reset" (Dica de Ouro)
+Se você desejar apagar todos os dados e começar o gerenciamento do zero (limpar o banco de dados):
+
+Feche o terminal onde o app está rodando.
+
+Vá até a pasta do projeto pelo explorador de arquivos do Windows.
+
+Localize o arquivo financeiro.db e delete-o.
+
+Ao rodar o comando streamlit run app.py novamente, o sistema criará um banco novo e vazio.
+
+Foco em automação, precisão de dados e gestão eficiente.
