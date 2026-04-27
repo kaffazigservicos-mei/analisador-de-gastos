@@ -3,12 +3,33 @@ import pandas as pd
 import sqlite3
 import plotly.express as px
 from ofxparse import OfxParser
-import io
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Analisador de Gastos", layout="wide")
+# --- 1. CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(page_title="Analisador de Gastos", layout="centered")
 
-# --- FUNÇÃO DE FORMATAÇÃO PADRÃO BRASIL (COM PONTO NO MILHAR) ---
+# --- 2. CSS PARA DESIGN HARMONIOSO ---
+st.markdown("""
+    <style>
+    .stApp { background-color: #020617 !important; color: #f8fafc !important; }
+    .block-container { max-width: 850px !important; padding-top: 2rem !important; }
+
+    [data-testid="stTable"], .stDataEditor {
+        background-color: #0f172a !important;
+        border-radius: 12px !important;
+        border: 1px solid #1e293b !important;
+    }
+
+    .custom-title {
+        color: #f8fafc !important;
+        font-size: 22px !important;
+        font-weight: 700 !important;
+        margin: 40px 0 20px 0 !important;
+        text-transform: uppercase;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 3. FUNÇÃO DE FORMATAÇÃO BRASILEIRA ---
 def formatar_br(valor):
     try:
         v = "{:,.2f}".format(float(valor))
@@ -17,123 +38,127 @@ def formatar_br(valor):
     except:
         return "R$ 0,00"
 
-# --- BANCO DE DADOS (SQLite) ---
+# --- 4. BANCO DE DADOS ---
 conn = sqlite3.connect('financeiro.db', check_same_thread=False)
 c = conn.cursor()
 c.execute('CREATE TABLE IF NOT EXISTS transacoes (data TEXT, valor REAL, descricao TEXT, tipo TEXT, categoria TEXT)')
 conn.commit()
 
-# --- SIDEBAR: HIERARQUIA COM DIGITAÇÃO (ITEM 5) ---
-st.sidebar.header("Configurar Hierarquia (%)")
-p_inv = st.sidebar.number_input("Investimento", min_value=0, max_value=100, value=10, step=1)
-p_manut = st.sidebar.number_input("Manutenção", min_value=0, max_value=100, value=70, step=1)
-p_livre = st.sidebar.number_input("Gastos Livres", min_value=0, max_value=100, value=5, step=1)
-p_doa = st.sidebar.number_input("Doação", min_value=0, max_value=100, value=5, step=1)
+# --- 5. LOGICA DE NOTIFICAÇÃO (SÓ DISPARA APÓS O RERUN) ---
+if "sucesso_extrato" in st.session_state:
+    st.toast(st.session_state["sucesso_extrato"], icon="✅")
+    del st.session_state["sucesso_extrato"]
 
-total_p = p_inv + p_manut + p_livre + p_doa
-if total_p != 100:
-    st.sidebar.warning(f"A soma das porcentagens é {total_p}%. O ideal é 100%.")
+if "sucesso_salvar" in st.session_state:
+    st.toast(st.session_state["sucesso_salvar"], icon="💾")
+    del st.session_state["sucesso_salvar"]
 
-st.title("📊 Analisador de Gastos Profissional")
+# --- 6. SIDEBAR ---
+st.sidebar.header("⚙️ Configurações")
+p_inv = st.sidebar.number_input("Investimento (%)", 0, 100, 10)
+p_manut = st.sidebar.number_input("Manutenção (%)", 0, 100, 70)
+p_livre = st.sidebar.number_input("Gastos Livres (%)", 0, 100, 5)
+p_doa = st.sidebar.number_input("Doação (%)", 0, 100, 5)
 
-# --- UPLOAD DO ARQUIVO ---
-file = st.file_uploader("Suba seu arquivo OFX", type=['ofx'])
+st.title("📊 Gestão Financeira")
 
-if file:
-    ofx = OfxParser.parse(file)
-    for acc in ofx.accounts:
-        for tx in acc.statement.transactions:
-            c.execute("SELECT * FROM transacoes WHERE data=? AND valor=? AND descricao=?",
-                      (str(tx.date), float(tx.amount), tx.memo))
-            if not c.fetchone():
-                c.execute("INSERT INTO transacoes VALUES (?,?,?,?,?)",
-                         (str(tx.date), float(tx.amount), tx.memo,
-                          "Receita" if tx.amount > 0 else "Despesa", "Outros"))
-    conn.commit()
+# --- 7. UPLOAD E PROCESSAMENTO ---
+with st.expander("📁 Importar Extrato", expanded=False):
+    file = st.file_uploader("Suba seu arquivo OFX", type=['ofx'])
+    if file:
+        if st.button("🔄 Processar Novo Arquivo"):
+            ofx = OfxParser.parse(file)
+            novos = 0
+            for acc in ofx.accounts:
+                for tx in acc.statement.transactions:
+                    c.execute("SELECT * FROM transacoes WHERE data=? AND valor=? AND descricao=?",
+                              (str(tx.date), float(tx.amount), tx.memo))
+                    if not c.fetchone():
+                        c.execute("INSERT INTO transacoes VALUES (?,?,?,?,?)",
+                                 (str(tx.date), float(tx.amount), tx.memo,
+                                  "Receita" if tx.amount > 0 else "Despesa", "Outros"))
+                        novos += 1
+            conn.commit()
+            # Salva a mensagem para ser exibida após o rerun
+            st.session_state["sucesso_extrato"] = f"Processado: {novos} novos lançamentos."
+            st.rerun()
 
-# --- TABELA DE CATEGORIZAÇÃO (ITEM 3) ---
+# --- 8. LOGICA DE EXIBIÇÃO ---
 df_db = pd.read_sql_query("SELECT * FROM transacoes", conn)
 
 if not df_db.empty:
-    st.subheader("📝 Categorização de Lançamentos")
-    # Incluída a categoria "Pessoal" conforme solicitado
-    categorias_lista = ["Saúde", "Transporte", "Alimentação", "Moradia", "Lazer", "Pessoal", "Doação", "Salário", "Investimento", "Outros"]
+    rec = df_db[df_db["tipo"] == "Receita"]["valor"].sum()
+    desp = abs(df_db[df_db["tipo"] == "Despesa"]["valor"].sum())
+    saldo = rec - desp
 
-    # Prepara a tabela de exibição (Data DD/MM/AA e Valor formatado)
+    # --- CARDS (FONTES 20PX) ---
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    card_html = """
+    <div style="background-color: #0f172a; border: 1px solid #1e293b; border-top: 4px solid {cor};
+                padding: 1.2rem; border-radius: 12px; text-align: center;">
+        <p style="color: #f8fafc; font-size: 20px; margin: 0; font-weight: 700;">{label}</p>
+        <h2 style="color: {cor}; font-size: 20px; margin: 10px 0 0 0; font-weight: 700;">{valor}</h2>
+    </div>
+    """
+    col1.markdown(card_html.format(label="RECEITAS", cor="#10b981", valor=formatar_br(rec)), unsafe_allow_html=True)
+    col2.markdown(card_html.format(label="DESPESAS", cor="#ef4444", valor=formatar_br(desp)), unsafe_allow_html=True)
+    col3.markdown(card_html.format(label="SALDO LÍQUIDO", cor="#3b82f6", valor=formatar_br(saldo)), unsafe_allow_html=True)
+
+    # --- TOP 5 ---
+    st.markdown('<p class="custom-title">TOP 5</p>', unsafe_allow_html=True)
+    df_desp_calc = df_db[df_db["tipo"] == "Despesa"]
+    if not df_desp_calc.empty:
+        ranking = df_desp_calc.groupby("categoria")["valor"].sum().abs().reset_index()
+        ranking = ranking.nlargest(5, 'valor').sort_values(by="valor", ascending=True)
+        ranking['rotulo'] = ranking['valor'].apply(formatar_br)
+
+        fig_rank = px.bar(
+            ranking, x="valor", y="categoria", orientation='h',
+            text="rotulo", color="categoria",
+            color_discrete_sequence=px.colors.qualitative.Safe
+        )
+        fig_rank.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showticklabels=False, title="", showgrid=False),
+            yaxis=dict(title="", tickfont=dict(size=14, color="#f8fafc")),
+            height=300, showlegend=False,
+            margin=dict(l=0, r=120, t=10, b=10), bargap=0.4
+        )
+        fig_rank.update_traces(textposition='outside', textfont=dict(color="#f8fafc", size=13), width=0.5, cliponaxis=False)
+        st.plotly_chart(fig_rank, use_container_width=True, config={'displayModeBar': False})
+
+    # --- DETALHAMENTO ---
+    st.markdown('<p class="custom-title">DETALHAMENTO</p>', unsafe_allow_html=True)
+    categorias_lista = ["Saúde", "Transporte", "Alimentação", "Moradia", "Lazer", "Pessoal", "Doação", "Salário", "Investimento", "Outros"]
     df_exibicao = df_db.copy()
-    df_exibicao["data"] = pd.to_datetime(df_exibicao["data"]).dt.strftime('%d/%m/%y')
-    df_exibicao["valor"] = df_exibicao["valor"].apply(formatar_br)
+    df_exibicao["data"] = pd.to_datetime(df_exibicao["data"]).dt.strftime('%d/%m/%Y')
 
     df_editado = st.data_editor(
         df_exibicao,
         column_config={
-            "data": st.column_config.Column("Data"),
+            "data": st.column_config.Column("Data", width="small"),
             "categoria": st.column_config.SelectboxColumn("Categoria", options=categorias_lista),
-            "valor": st.column_config.Column("Valor (R$)", disabled=True)
+            "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f")
         },
-        hide_index=True
+        hide_index=True, use_container_width=True
     )
 
-    if st.button("Salvar Alterações e Gerar Análise"):
+    if st.button("💾 Salvar Alterações"):
         for i, row in df_editado.iterrows():
             c.execute("UPDATE transacoes SET categoria=? WHERE descricao=? AND data=?",
                       (row['categoria'], row['descricao'], df_db.iloc[i]['data']))
         conn.commit()
-        st.success("Dados salvos e análise atualizada!")
+        st.session_state["sucesso_salvar"] = "Alterações salvas com sucesso!"
+        st.rerun()
 
-        # --- CÁLCULOS ---
-        rec = df_db[df_db["tipo"] == "Receita"]["valor"].sum()
-        desp = abs(df_db[df_db["tipo"] == "Despesa"]["valor"].sum())
-        saldo = rec - desp
-
-        # --- MÉTRICAS COM FONTE AUMENTADA (HARMONIA VISUAL) ---
-        st.subheader("💰 Resumo Financeiro")
-        col1, col2, col3 = st.columns(3)
-        estilo = "<p style='font-size:22px; font-weight:bold; margin-bottom:-10px;'>{label}</p><p style='font-size:34px; color:#1f77b4; font-weight:bold;'>{valor}</p>"
-
-        col1.markdown(estilo.format(label="Total Receitas", valor=formatar_br(rec)), unsafe_allow_html=True)
-        col2.markdown(estilo.format(label="Total Despesas", valor=formatar_br(desp)), unsafe_allow_html=True)
-        col3.markdown(estilo.format(label="Saldo Líquido", valor=formatar_br(saldo)), unsafe_allow_html=True)
-
-        # --- RANKING DE DESPESAS (ITEM 4 - TOP 5) ---
-        st.subheader("🔝 Top 5 Categorias de Gastos")
-        df_desp_calc = df_db[df_db["tipo"] == "Despesa"]
-        if not df_desp_calc.empty:
-            ranking = df_desp_calc.groupby("categoria")["valor"].sum().abs().reset_index()
-            ranking = ranking.nlargest(5, 'valor').sort_values(by="valor", ascending=True)
-
-            fig_rank = px.bar(ranking, x="valor", y="categoria", orientation='h', color="categoria")
-
-            # Limpeza total dos eixos e títulos
-            fig_rank.update_layout(
-                separators=',.',
-                showlegend=False,
-                font=dict(size=16), # Aumentei um pouco a fonte das categorias
-                xaxis=dict(showticklabels=False, title="", showgrid=False), # Esconde números e título de baixo
-                yaxis=dict(title=""), # Esconde título lateral
-                margin=dict(l=20, r=20, t=20, b=20), # Ajusta margens para ganhar espaço
-                plot_bgcolor="rgba(0,0,0,0)", # Fundo transparente
-            )
-
-            fig_rank.update_traces(
-                texttemplate='<b>R$ %{x:,.2f}</b>', # Valor em negrito
-                textposition='outside',
-                cliponaxis=False # Garante que o texto não seja cortado
-            )
-            st.plotly_chart(fig_rank, use_container_width=True)
-
-        # --- HIERARQUIA DE SALDO (ITEM 5) ---
-        if saldo > 0:
-            st.subheader("💡 Sugestão de Distribuição do Saldo")
-            sug_dados = {
-                "Destinação de Valores": ["Investimento", "Manutenção", "Gastos Livres", "Doação"],
-                "Valor Recomendado": [
-                    formatar_br(saldo * (p_inv/100)),
-                    formatar_br(saldo * (p_manut/100)),
-                    formatar_br(saldo * (p_livre/100)),
-                    formatar_br(saldo * (p_doa/100))
-                ]
-            }
-            st.table(pd.DataFrame(sug_dados))
+    # --- SUGESTÃO ---
+    if saldo > 0:
+        st.markdown('<p class="custom-title">SUGESTÃO DE DISTRIBUIÇÃO</p>', unsafe_allow_html=True)
+        sugestao_df = pd.DataFrame({
+            "Destinação": ["Investimento", "Manutenção", "Gastos Livres", "Doação"],
+            "Valor": [formatar_br(saldo * (p/100)) for p in [p_inv, p_manut, p_livre, p_doa]]
+        })
+        st.table(sugestao_df)
 else:
     st.info("Aguardando upload de arquivo OFX para iniciar a análise.")
